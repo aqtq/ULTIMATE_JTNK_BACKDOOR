@@ -9,15 +9,92 @@
     margin: 0;
     height: 100%;
     overflow: hidden;
-    background: #000 url("https://raw.githubusercontent.com/aqtq/ULTIMATE_JTNK_BACKDOOR/refs/heads/main/4e48eea2-0588-475e-aa8d-cbc226c2a1a2.png") center / cover no-repeat;
+    background: #000;
+    cursor: none;
   }
+
+  /* 背景画像:色相が回り、ゆっくり拡大縮小 */
+  #bg {
+    position: fixed;
+    inset: -5%;
+    background: url("https://raw.githubusercontent.com/aqtq/ULTIMATE_JTNK_BACKDOOR/refs/heads/main/4e48eea2-0588-475e-aa8d-cbc226c2a1a2.png") center / cover no-repeat;
+    animation: hue 8s linear infinite, pulse 6s ease-in-out infinite;
+  }
+  @keyframes hue {
+    from { filter: hue-rotate(0deg) saturate(1.6) contrast(1.1); }
+    to   { filter: hue-rotate(360deg) saturate(1.6) contrast(1.1); }
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50%      { transform: scale(1.08) rotate(1deg); }
+  }
+
+  /* 虹色グラデーションが流れるオーバーレイ */
+  #rainbow {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(115deg,
+      #ff0000, #ff9900, #ffee00, #33ff00, #00ffee, #0066ff, #cc00ff, #ff0000);
+    background-size: 300% 300%;
+    mix-blend-mode: overlay;
+    opacity: .55;
+    animation: flow 6s linear infinite;
+  }
+  @keyframes flow {
+    from { background-position: 0% 50%; }
+    to   { background-position: 300% 50%; }
+  }
+
+  /* ゆっくり回る虹色の光 */
+  #spin {
+    position: fixed;
+    left: 50%; top: 50%;
+    width: 160vmax; height: 160vmax;
+    margin: -80vmax 0 0 -80vmax;
+    background: conic-gradient(from 0deg,
+      #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+    mix-blend-mode: soft-light;
+    opacity: .5;
+    animation: rot 12s linear infinite;
+  }
+  @keyframes rot { to { transform: rotate(360deg); } }
+
+  /* 走査線 */
+  #scan {
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg, rgba(0,0,0,.18) 0 2px, transparent 2px 4px);
+    pointer-events: none;
+    animation: scanmove 1s linear infinite;
+  }
+  @keyframes scanmove { to { background-position: 0 4px; } }
+
+  /* 周辺を暗くするビネット */
+  #vignette {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle, transparent 50%, rgba(0,0,0,.7) 100%);
+    pointer-events: none;
+  }
+
+  canvas { position: fixed; inset: 0; pointer-events: none; }
 </style>
 </head>
 <body>
+  <div id="bg"></div>
+  <div id="spin"></div>
+  <div id="rainbow"></div>
+  <canvas id="fx"></canvas>
+  <div id="scan"></div>
+  <div id="vignette"></div>
+
 <script>
+  /* ===== 常にフルスクリーン ===== */
   const el = document.documentElement;
 
   function goFull() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) return;
     const req = el.requestFullscreen || el.webkitRequestFullscreen;
     if (req) {
       try {
@@ -27,13 +104,106 @@
     }
   }
 
-  // 開いた瞬間に試す(多くのブラウザでは拒否されます)
-  goFull();
+  goFull(); // 開いた瞬間に試す(拒否される場合あり)
 
-  // 拒否された場合は、最初の操作で即フルスクリーン
-  ['click', 'keydown', 'touchstart'].forEach(ev =>
-    window.addEventListener(ev, goFull, { once: true })
+  // ブラウザの仕様上、ユーザー操作があるたびに全画面へ復帰します
+  ['pointerdown', 'click', 'keydown', 'touchstart'].forEach(ev =>
+    window.addEventListener(ev, goFull)
   );
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) setTimeout(goFull, 50);
+  });
+
+  /* ===== パーティクル&虹色の軌跡 ===== */
+  const cv = document.getElementById('fx');
+  const ctx = cv.getContext('2d');
+  let W, H;
+  function resize() { W = cv.width = innerWidth; H = cv.height = innerHeight; }
+  addEventListener('resize', resize);
+  resize();
+
+  const mouse = { x: W / 2, y: H / 2, moved: false };
+  addEventListener('pointermove', e => {
+    mouse.x = e.clientX; mouse.y = e.clientY; mouse.moved = true;
+  });
+
+  const particles = [];
+  let hue = 0;
+
+  function spawn(x, y, n, speed) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = Math.random() * speed;
+      particles.push({
+        x, y,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s,
+        life: 1,
+        decay: .008 + Math.random() * .015,
+        size: 2 + Math.random() * 5,
+        hue: (hue + Math.random() * 60) % 360
+      });
+    }
+  }
+
+  // クリックで花火
+  addEventListener('pointerdown', e => spawn(e.clientX, e.clientY, 80, 7));
+
+  let t = 0;
+  function loop() {
+    t += 0.02;
+    hue = (hue + 2) % 360;
+
+    // 残像
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(0,0,0,.12)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'lighter';
+
+    // 自動で浮かぶ光の粒
+    if (Math.random() < .6) {
+      spawn(Math.random() * W, H + 10, 1, 1);
+      const p = particles[particles.length - 1];
+      p.vx = (Math.random() - .5) * 1.2;
+      p.vy = -2 - Math.random() * 3;
+      p.size = 3 + Math.random() * 6;
+    }
+
+    // マウス(タッチ)の軌跡
+    if (mouse.moved) spawn(mouse.x, mouse.y, 4, 2);
+
+    // 画面を流れる虹のリボン
+    for (let k = 0; k < 3; k++) {
+      ctx.beginPath();
+      for (let x = 0; x <= W; x += 12) {
+        const y = H / 2 + Math.sin(x * .005 + t * 2 + k) * (H * .22)
+                 + Math.sin(x * .013 - t * 3) * 30;
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = `hsla(${(hue + k * 120) % 360},100%,60%,.55)`;
+      ctx.lineWidth = 4;
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = `hsl(${(hue + k * 120) % 360},100%,60%)`;
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+
+    // パーティクル描画
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy;
+      p.vy += 0.02;
+      p.life -= p.decay;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      ctx.fillStyle = `hsla(${p.hue},100%,60%,${p.life})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    requestAnimationFrame(loop);
+  }
+  loop();
 </script>
 </body>
 </html>
