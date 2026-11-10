@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fullscreen</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  iframe { position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; }
+  #start {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.6); color: #fff;
+    font: 20px sans-serif; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <iframe id="view" src="blob:https://chatgpt.com/4e48eea2-0588-475e-aa8d-cbc226c2a1a2"></iframe>
+  <div id="start">クリック(またはキーを押す)でフルスクリーン</div>
+
+  <script>
+    const el = document.documentElement;
+    const start = document.getElementById('start');
+
+    function goFull() {
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (req) req.call(el).catch(() => {});
+      start.remove();
+    }
+
+    // 開いた瞬間に試す(多くのブラウザでは拒否されます)
+    try { el.requestFullscreen().then(() => start.remove()).catch(() => {}); } catch (e) {}
+
+    // 拒否された場合は、最初の操作で即フルスクリーン
+    ['click', 'keydown', 'touchstart'].forEach(ev =>
+      window.addEventListener(ev, goFull, { once: true })
+    );
+  </script>
+</body>
+</html>
